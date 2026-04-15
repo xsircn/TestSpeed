@@ -2,8 +2,8 @@ name: Cloudflare Auto Speedtest
 
 on:
   schedule:
-    - cron: '0 * * * *'  # 每小时执行一次 (UTC时间)
-  workflow_dispatch:      # 允许手动触发
+    - cron: '0 * * * *'
+  workflow_dispatch:
 
 jobs:
   build:
@@ -15,36 +15,19 @@ jobs:
 
       - name: Download and Setup CloudflareST
         run: |
-          # 1. 获取最新版下载链接
           DOWNLOAD_URL=$(curl -s https://api.github.com/repos/XIU2/CloudflareSpeedTest/releases/latest | grep "browser_download_url.*linux_amd64.tar.gz" | cut -d '"' -f 4)
-          echo "正在下载: $DOWNLOAD_URL"
           curl -L -o CloudflareST.tar.gz "$DOWNLOAD_URL"
-          
-          # 2. 解压
           tar -zxf CloudflareST.tar.gz
-          
-          # 3. 精准重命名：将程序 cfst 改名为 CloudflareST
-          if [ -f "cfst" ]; then
-              mv cfst CloudflareST
-          fi
-          
-          # 4. 赋权
+          if [ -f "cfst" ]; then mv cfst CloudflareST; fi
           chmod +x CloudflareST
 
       - name: Run Speedtest
         run: |
-          # 执行测速并生成原始结果
-          # -n 500: 测试500个IP确保质量
-          # -t 10: 【修正点】单个IP测速10次，这样测出的【丢包率】更准确
-          # -p 10: 控制台显示前10名
+          # 测试 500 个 IP，每个测 10 次以获得准确丢包率
           sudo ./CloudflareST -n 500 -t 10 -p 10 -o "full_result.csv"
-          
-          # 核心逻辑：只截取 CSV 的表头和前 10 行数据
           if [ -f "full_result.csv" ]; then
               sed -n '1,11p' full_result.csv > result.csv
-              echo "已成功截取 Top 10 优选数据"
           else
-              echo "错误：未生成测速结果文件"
               exit 1
           fi
 
@@ -52,11 +35,7 @@ jobs:
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          
-          # 只有文件非空且有内容变动时才提交
           if [ -s "result.csv" ]; then
             git add result.csv
-            git diff --quiet && git diff --staged --quiet || (git commit -m "自动更新优选IP (Top 10): $(date)" && git push)
-          else
-            echo "未发现有效数据，跳过提交"
+            git diff --quiet && git diff --staged --quiet || (git commit -m "自动更新: $(date)" && git push)
           fi
