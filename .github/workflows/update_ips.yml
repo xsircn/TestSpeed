@@ -2,7 +2,7 @@ name: Cloudflare Auto Speedtest
 
 on:
   schedule:
-    - cron: '0 * * * *'  # 每小时执行一次
+    - cron: '0 * * * *'  # 每小时执行一次 (UTC时间)
   workflow_dispatch:      # 允许手动触发
 
 jobs:
@@ -15,25 +15,37 @@ jobs:
 
       - name: Download and Setup CloudflareST
         run: |
+          # 1. 获取最新版下载链接
           DOWNLOAD_URL=$(curl -s https://api.github.com/repos/XIU2/CloudflareSpeedTest/releases/latest | grep "browser_download_url.*linux_amd64.tar.gz" | cut -d '"' -f 4)
+          echo "正在下载: $DOWNLOAD_URL"
           curl -L -o CloudflareST.tar.gz "$DOWNLOAD_URL"
+          
+          # 2. 解压
           tar -zxf CloudflareST.tar.gz
-          if [ -f "cfst" ]; then mv cfst CloudflareST; fi
+          
+          # 3. 精准重命名：将程序 cfst 改名为 CloudflareST，避开 ip.txt 等干扰
+          if [ -f "cfst" ]; then
+              mv cfst CloudflareST
+          fi
+          
+          # 4. 赋权
           chmod +x CloudflareST
 
       - name: Run Speedtest
         run: |
-          # 【修改点 1】：通过 -p 10 参数，让工具在控制台显示前 10 名
-          # 虽然 -o 默认会导出所有测试通过的 IP，但我们可以通过后续脚本裁剪
-          sudo ./CloudflareST -n 500 -tl 200 -sl 5 -p 10 -o "full_result.csv"
+          # 执行测速并生成原始结果
+          # -n 500: 测试500个IP确保质量
+          # -c 20: 每个IP发20个包，测出的【丢包率】更准确
+          # -p 10: 控制台显示前10名
+          sudo ./CloudflareST -n 500 -c 20 -p 10 -o "full_result.csv"
           
-          # 【修改点 2】：使用 sed 命令只保留 CSV 的表头（第 1 行）和前 10 行数据（第 2 到 11 行）
+          # 【核心逻辑】：只截取 CSV 的表头和前 10 行数据
           if [ -f "full_result.csv" ]; then
               sed -n '1,11p' full_result.csv > result.csv
-              echo "已成功裁剪数据，仅保留前 10 组最快 IP"
+              echo "已成功截取 Top 10 优选数据"
           else
-            echo "未能生成测速文件"
-            exit 1
+              echo "错误：未生成测速结果文件"
+              exit 1
           fi
 
       - name: Commit and Push
@@ -41,10 +53,10 @@ jobs:
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           
+          # 只有文件非空且有内容变动时才提交
           if [ -s "result.csv" ]; then
             git add result.csv
-            # 只有内容变动时才推送
             git diff --quiet && git diff --staged --quiet || (git commit -m "自动更新优选IP (Top 10): $(date)" && git push)
           else
-            echo "无有效数据"
+            echo "未发现有效数据，跳过提交"
           fi
