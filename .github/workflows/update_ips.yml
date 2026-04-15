@@ -2,7 +2,7 @@ name: Cloudflare Auto Speedtest
 
 on:
   schedule:
-    - cron: '0 * * * *'  # 每小时执行一次 (UTC时间)
+    - cron: '0 * * * *'  # 每小时执行一次
   workflow_dispatch:      # 允许手动触发
 
 jobs:
@@ -23,27 +23,38 @@ jobs:
           # 2. 解压
           tar -zxf CloudflareST.tar.gz
           
-          # 3. 【核心修复】精准重命名：将真正的程序 cfst 改名为 CloudflareST
-          # 这样可以彻底避免把 ip.txt 或 ipv6.txt 误认为程序
+          # 3. 精准重命名程序（解决新版解压出 cfst 的问题）
           if [ -f "cfst" ]; then
               mv cfst CloudflareST
           fi
           
-          # 4. 赋权并验证文件类型
+          # 4. 赋权并检查
           chmod +x CloudflareST
-          echo "文件类型检查："
           file CloudflareST
-          
+
       - name: Run Speedtest
         run: |
-          # 执行测速。如果报错权限不足，脚本会自动尝试 sudo
-          # -n 200: 测200个IP, -tl 200: 延迟200ms以内, -sl 5: 速度5MB/s以上
-          sudo ./CloudflareST -n 200 -tl 200 -sl 5 -p 10 -o "result.csv"
+          # 放宽测速条件以确保 100% 生成 result.csv
+          # -n 200: 测试 200 个 IP
+          # -p 10: 只输出前 10 个最快的
+          # 去掉 -sl 和 -tl 参数，避免因为 Action 服务器环境太差找不到 IP 而报错
+          sudo ./CloudflareST -n 200 -p 10 -o "result.csv"
+          
+          # 检查文件是否生成
+          if [ ! -f "result.csv" ]; then
+            echo "错误：测速未产生 result.csv，尝试使用基础模式运行..."
+            sudo ./CloudflareST -o "result.csv"
+          fi
 
       - name: Commit and Push
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add result.csv
-          # 只有在文件内容确实有变化时才提交，防止 Action 报错
-          git diff --quiet && git diff --staged --quiet || (git commit -m "自动更新优选IP: $(date)" && git push)
+          
+          # 只有文件存在且有内容变动时才提交
+          if [ -s "result.csv" ]; then
+            git add result.csv
+            git diff --quiet && git diff --staged --quiet || (git commit -m "自动更新优选IP: $(date)" && git push)
+          else
+            echo "未发现有效数据，跳过提交"
+          fi
