@@ -23,7 +23,7 @@ jobs:
           # 2. 解压
           tar -zxf CloudflareST.tar.gz
           
-          # 3. 精准重命名：将程序 cfst 改名为 CloudflareST，避开 ip.txt 等干扰
+          # 3. 精准重命名：将程序 cfst 改名为 CloudflareST
           if [ -f "cfst" ]; then
               mv cfst CloudflareST
           fi
@@ -35,11 +35,11 @@ jobs:
         run: |
           # 执行测速并生成原始结果
           # -n 500: 测试500个IP确保质量
-          # -c 20: 每个IP发20个包，测出的【丢包率】更准确
+          # -t 10: 【修正点】单个IP测速10次，这样测出的【丢包率】更准确
           # -p 10: 控制台显示前10名
-          sudo ./CloudflareST -n 500 -c 20 -p 10 -o "full_result.csv"
+          sudo ./CloudflareST -n 500 -t 10 -p 10 -o "full_result.csv"
           
-          # 【核心逻辑】：只截取 CSV 的表头和前 10 行数据
+          # 核心逻辑：只截取 CSV 的表头和前 10 行数据
           if [ -f "full_result.csv" ]; then
               sed -n '1,11p' full_result.csv > result.csv
               echo "已成功截取 Top 10 优选数据"
