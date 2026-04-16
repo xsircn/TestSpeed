@@ -32,9 +32,9 @@ jobs:
               
               # 3. 【新增逻辑】生成订阅格式的文本文件 (sub.txt)
               # awk 处理逻辑：跳过第一行，取第1列(IP)和第2列(端口)，拼接备注
-              awk -F',' 'NR>1 && NR<=11 {print $1 ":" $2 "#US-Xsop"}' full_result.csv > sub.txt
+              awk -F',' 'NR>1 && NR<=11 {print $1 ":" $2 "#US-Xsop"}' full_result.csv > api.txt
               
-              echo "已生成 result.csv 和 best.txt"
+              echo "已生成 result.csv 和 api.txt"
           else
               exit 1
           fi
@@ -45,6 +45,6 @@ jobs:
           git config --local user.name "github-actions[bot]"
           
           # 同时添加 csv 和 txt 文件
-          git add result.csv sub.txt
+          git add result.csv api.txt
           
           git diff --quiet && git diff --staged --quiet || (git commit -m "自动更新优选数据: $(date)" && git push)
