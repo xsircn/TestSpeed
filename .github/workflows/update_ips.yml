@@ -8,6 +8,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true  # 消除 Node.js 20 警告
 
     steps:
       - name: Checkout Code
@@ -27,15 +29,32 @@ jobs:
           sudo ./CloudflareST -n 500 -t 10 -p 10 -o "full_result.csv"
           
           if [ -f "full_result.csv" ]; then
-              # 2. 生成网页用的精简版 CSV (保留前10个)
+              # 2. 生成网页用的精简版 CSV
               sed -n '1,11p' full_result.csv > result.csv
               
-              # 3. 【新增逻辑】生成订阅格式的文本文件 (sub.txt)
-              # awk 处理逻辑：跳过第一行，取第1列(IP)和第2列(端口)，拼接备注
-              awk -F',' 'NR>1 && NR<=11 {print $1 ":443#US-Xsop"}' full_result.csv > api.tx
+              # 3. 【修正逻辑】动态定位列索引并生成 api.txt
+              # 我们通过表头获取 IP (第1列) 和 Port (第2列)
+              # 如果你的环境里列数有变，这段脚本会自动寻找名为 "端口" 或 "Port" 的列
               
-              echo "已生成 result.csv 和 api.txt"
+              awk -F',' '
+                NR==1 {
+                  for(i=1;i<=NF;i++){
+                    if($i ~ /IP|地址/) ip_idx=i;
+                    if($i ~ /端口|Port/) port_idx=i;
+                  }
+                }
+                NR>1 && NR<=11 {
+                  # 如果找不到列索引，默认使用 1 和 2
+                  if(!ip_idx) ip_idx=1;
+                  if(!port_idx) port_idx=2;
+                  print $ip_idx ":" $port_idx "#US-Xsop"
+                }
+              ' full_result.csv > api.txt
+              
+              echo "已生成 api.txt，内容预览："
+              cat api.txt
           else
+              echo "错误：未找到 full_result.csv"
               exit 1
           fi
 
@@ -43,8 +62,5 @@ jobs:
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          
-          # 同时添加 csv 和 txt 文件
           git add result.csv api.txt
-          
-          git diff --quiet && git diff --staged --quiet || (git commit -m "自动更新优选数据: $(date)" && git push)
+          git diff --quiet && git diff --staged --quiet || (git commit -m "自动更新数据 (Node24): $(date)" && git push)
