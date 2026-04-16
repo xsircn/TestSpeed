@@ -32,7 +32,7 @@ jobs:
               
               # 3. 【新增逻辑】生成订阅格式的文本文件 (sub.txt)
               # awk 处理逻辑：跳过第一行，取第1列(IP)和第2列(端口)，拼接备注
-              awk -F',' 'NR>1 && NR<=11 {print $1 ":" $2 "#US-Xsop"}' full_result.csv > api.txt
+              awk -F',' 'NR>1 && NR<=11 {print $1 ":443#US-Xsop"}' full_result.csv > api.tx
               
               echo "已生成 result.csv 和 api.txt"
           else
