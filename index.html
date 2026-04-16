@@ -49,7 +49,7 @@
     <script>
         async function loadData() {
             try {
-                const response = await fetch('result.csv');
+               const response = await fetch('result.csv?t=' + new Date().getTime());;
                 const csvData = await response.text();
                 const rows = csvData.split('\n').filter(row => row.trim() !== "");
                 
