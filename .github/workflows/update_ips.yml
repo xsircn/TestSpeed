@@ -23,10 +23,18 @@ jobs:
 
       - name: Run Speedtest
         run: |
-          # 测试 500 个 IP，每个测 10 次以获得准确丢包率
+          # 1. 测速并生成原始结果
           sudo ./CloudflareST -n 500 -t 10 -p 10 -o "full_result.csv"
+          
           if [ -f "full_result.csv" ]; then
+              # 2. 生成网页用的精简版 CSV (保留前10个)
               sed -n '1,11p' full_result.csv > result.csv
+              
+              # 3. 【新增逻辑】生成订阅格式的文本文件 (sub.txt)
+              # awk 处理逻辑：跳过第一行，取第1列(IP)和第2列(端口)，拼接备注
+              awk -F',' 'NR>1 && NR<=11 {print $1 ":" $2 "#US-Xsop"}' full_result.csv > sub.txt
+              
+              echo "已生成 result.csv 和 best.txt"
           else
               exit 1
           fi
@@ -35,7 +43,8 @@ jobs:
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          if [ -s "result.csv" ]; then
-            git add result.csv
-            git diff --quiet && git diff --staged --quiet || (git commit -m "自动更新: $(date)" && git push)
-          fi
+          
+          # 同时添加 csv 和 txt 文件
+          git add result.csv sub.txt
+          
+          git diff --quiet && git diff --staged --quiet || (git commit -m "自动更新优选数据: $(date)" && git push)
