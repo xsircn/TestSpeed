@@ -1,51 +1,30 @@
-name: Cloudflare Auto Speedtest
-
-on:
-  schedule:
-    - cron: '0 * * * *'
-  workflow_dispatch:
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true 
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Download and Setup CloudflareST
+- name: Run Speedtest and Identify ISP
         run: |
-          DOWNLOAD_URL=$(curl -s https://api.github.com/repos/XIU2/CloudflareSpeedTest/releases/latest | grep "browser_download_url.*linux_amd64.tar.gz" | cut -d '"' -f 4)
-          curl -L -o CloudflareST.tar.gz "$DOWNLOAD_URL"
-          tar -zxf CloudflareST.tar.gz
-          if [ -f "cfst" ]; then mv cfst CloudflareST; fi
-          chmod +x CloudflareST
-
-      - name: Run Speedtest
-        run: |
-          # 1. 运行测速
+          # 1. 运行测速 (增加 -p 0 仅测延迟，或保持原样)
           sudo ./CloudflareST -n 500 -t 10 -p 10 -o "full_result.csv"
           
           if [ -f "full_result.csv" ]; then
-              # 2. 生成网页用的 CSV
-              sed -n '1,11p' full_result.csv > result.csv
+              # 2. 获取表头并创建临时文件
+              head -n 1 full_result.csv > result.csv
               
-              # 3. 【终极修正】硬编码端口号为 443
-              # $1 是 IP 地址，后面直接拼接 :443#US-Xsop
-              awk -F',' 'NR>1 && NR<=11 {print $1 ":443#US-Xsop"}' full_result.csv > api
+              # 3. 循环处理前 10 个 IP 并查询运营商
+              # 我们读取测速结果的前 10 行数据
+              tail -n +2 full_result.csv | head -n 10 | while IFS=, read -r line; do
+                  ip=$(echo "$line" | cut -d',' -f1)
+                  
+                  # 通过 ip-api 获取运营商名称 (注意接口频率限制，10个IP没问题)
+                  isp=$(curl -s "http://ip-api.com/json/$ip?fields=isp" | sed 's/.*"isp":"\([^"]*\)".*/\1/')
+                  
+                  # 将运营商信息拼接到这一行的末尾（存入 result.csv）
+                  echo "$line,$isp" >> result.csv
+                  
+                  # 同时生成订阅用的 api 文件，把 ISP 拼在备注里
+                  echo "$ip:443#$isp-Xsop" >> api
+              done
               
-              echo "api 已生成，预览内容："
-              cat api
+              echo "已完成运营商识别，result.csv 预览："
+              head -n 5 result.csv
           else
               echo "错误：未生成测速文件"
               exit 1
           fi
-
-      - name: Commit and Push
-        run: |
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git config --local user.name "github-actions[bot]"
-          git add result.csv api
-          git diff --quiet && git diff --staged --quiet || (git commit -m "修正订阅格式: $(date)" && git push)
