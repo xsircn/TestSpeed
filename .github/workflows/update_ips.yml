@@ -33,8 +33,8 @@ jobs:
               sed -n '1,11p' full_result.csv > result.csv
               
               # 3. 【终极修正】硬编码端口号为 443
-              # $1 是 IP 地址，后面直接拼接 :443#US-Xsop
-              awk -F',' 'NR>1 && NR<=11 {print $1 ":443#US-Xsop"}' full_result.csv > api
+              # $1 是 IP 地址，后面直接拼接 :443#Xsop-US
+              awk -F',' 'NR>1 && NR<=11 {print $1 ":443#Xsop-US"}' full_result.csv > api
               
               echo "api 已生成，预览内容："
               cat api
